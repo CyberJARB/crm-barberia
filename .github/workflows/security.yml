@@ -15,10 +15,10 @@ jobs:
     name: Composer Audit (CVE scan)
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
       - uses: shivammathur/setup-php@v2
         with:
-          php-version: '8.3'
+          php-version: '8.4'
       - run: composer install --no-interaction --prefer-dist --no-dev
       - name: Composer security audit
         run: composer audit
@@ -28,10 +28,10 @@ jobs:
     name: PHPStan (nivel 6)
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
       - uses: shivammathur/setup-php@v2
         with:
-          php-version: '8.3'
+          php-version: '8.4'
       - run: composer install --no-interaction --prefer-dist
       - run: cp .env.example .env && php artisan key:generate
       - name: PHPStan analysis
@@ -55,10 +55,10 @@ jobs:
           --health-timeout=5s
           --health-retries=3
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
       - uses: shivammathur/setup-php@v2
         with:
-          php-version: '8.3'
+          php-version: '8.4'
           extensions: pdo_mysql, openssl
       - run: composer install --no-interaction --prefer-dist
       - name: Configure test environment
@@ -101,10 +101,10 @@ jobs:
           --health-timeout=5s
           --health-retries=3
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
       - uses: shivammathur/setup-php@v2
         with:
-          php-version: '8.3'
+          php-version: '8.4'
       - run: composer install --no-interaction --prefer-dist
       - name: Configure environment
         run: |
@@ -120,7 +120,7 @@ jobs:
       - name: Run security audit
         run: php artisan seguridad:auditar --json | tee audit-result.json
       - name: Upload audit results
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v5
         with:
           name: security-audit
           path: audit-result.json
@@ -131,10 +131,10 @@ jobs:
     runs-on: ubuntu-latest
     needs: security-tests
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
       - uses: shivammathur/setup-php@v2
         with:
-          php-version: '8.3'
+          php-version: '8.4'
       - run: composer install --no-interaction --prefer-dist
       - run: cp .env.example .env && php artisan key:generate
       - name: Start server
@@ -157,15 +157,15 @@ jobs:
     name: SBOM — Software Bill of Materials
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
       - uses: shivammathur/setup-php@v2
         with:
-          php-version: '8.3'
+          php-version: '8.4'
       - run: composer install --no-interaction --prefer-dist
       - name: Generate SBOM (composer show)
         run: composer show --format=json > sbom.json
       - name: Upload SBOM artifact
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v5
         with:
           name: sbom-${{ github.sha }}
           path: sbom.json
@@ -191,10 +191,10 @@ jobs:
           --health-timeout=5s
           --health-retries=3
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
       - uses: shivammathur/setup-php@v2
         with:
-          php-version: '8.3'
+          php-version: '8.4'
           extensions: pdo_mysql, openssl
       - run: composer install --no-interaction --prefer-dist
       - name: Configure environment for DAST
@@ -227,7 +227,7 @@ jobs:
           allow_issue_writing: false
           cmd_options: '-j'
       - name: Upload ZAP report
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v5
         if: always()
         with:
           name: zap-report-${{ github.sha }}

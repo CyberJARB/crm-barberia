@@ -2,7 +2,7 @@
 
 Mandantenfähiges SaaS-CRM für Barbershops und Friseursalons — Terminverwaltung, Kundenkartei, Kasse, Online-Buchung und Lead-Pipeline. Entwickelt mit **Security by Design** und DSGVO-Konformität als Grundprinzip.
 
-**Stack:** Laravel 13 · PHP 8.3+ · Filament 5 · Livewire · MySQL · Stripe (Cashier)
+**Stack:** Laravel 13 · PHP 8.4+ · Filament 5 · Livewire · MySQL · Stripe (Cashier)
 
 ---
 
@@ -35,7 +35,7 @@ Details: [`SECURITY_HARDENING_REPORT.md`](SECURITY_HARDENING_REPORT.md) · [`doc
 
 ## Installation (lokal)
 
-Voraussetzungen: PHP 8.3+, Composer, Node.js, MySQL
+Voraussetzungen: PHP 8.4+, Composer, Node.js, MySQL
 
 ```bash
 git clone https://github.com/CyberJARB/crm-barberia.git
