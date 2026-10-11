@@ -31,11 +31,13 @@ return Application::configure(basePath: dirname(__DIR__))
         // del LB. El LB es quien termina TLS y sanea las cabeceras.
         $middleware->trustProxies(at: '*');
 
+        // UA2 T03 / OWASP A05 — Security headers en TODAS las respuestas.
+        // Se registra ANTES que ForceHttps para envolverlo: así también la
+        // redirección 301 a HTTPS lleva las cabeceras de seguridad.
+        $middleware->append(SecurityHeaders::class);
+
         // OWASP A02 / CWE-319 — Forzar HTTPS en producción
         $middleware->append(ForceHttps::class);
-
-        // UA2 T03 / OWASP A05 — Security headers en TODAS las respuestas
-        $middleware->append(SecurityHeaders::class);
 
         // UA2 T02 / OWASP A01 — Tenant isolation para usuarios autenticados
         $middleware->appendToGroup('web', EnsureTenantScope::class);
