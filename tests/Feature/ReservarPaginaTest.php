@@ -124,11 +124,17 @@ class ReservarPaginaTest extends TestCase
             'activo' => true,
         ]);
 
-        // El global scope del tenant hace que el findOrFail no lo encuentre
-        $this->expectException(ModelNotFoundException::class);
+        // El global scope del tenant hace que el findOrFail no lo encuentre.
+        // Livewire >= 4.4 captura el ModelNotFoundException, así que se verifica el estado.
+        $componente = Livewire::test(ReservarPagina::class, ['slug' => 'demo-salon']);
 
-        Livewire::test(ReservarPagina::class, ['slug' => 'demo-salon'])
-            ->call('elegirServicio', $servicioAjeno->id);
+        try {
+            $componente->call('elegirServicio', $servicioAjeno->id);
+        } catch (ModelNotFoundException) {
+            // Comportamiento de versiones anteriores de Livewire: también válido
+        }
+
+        $componente->assertSet('servicioId', null);
     }
 
     public function test_slot_ocupado_es_rechazado_con_mensaje(): void

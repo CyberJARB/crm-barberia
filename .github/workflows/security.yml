@@ -41,6 +41,9 @@ jobs:
   security-tests:
     name: Security Tests
     runs-on: ubuntu-latest
+    env:
+      # phpunit.xml define DB_PASSWORD vacío para local; una variable real del entorno tiene prioridad
+      DB_PASSWORD: root
     services:
       mysql:
         image: mysql:8.0
