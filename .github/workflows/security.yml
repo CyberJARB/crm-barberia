@@ -1,0 +1,235 @@
+name: Security Pipeline
+
+on:
+  push:
+    branches: [main, develop]
+  pull_request:
+    branches: [main]
+  schedule:
+    # Weekly CVE scan every Monday at 06:00 UTC
+    - cron: '0 6 * * 1'
+
+jobs:
+  # === SCA — Software Composition Analysis (OWASP A06) ===
+  composer-audit:
+    name: Composer Audit (CVE scan)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: shivammathur/setup-php@v2
+        with:
+          php-version: '8.3'
+      - run: composer install --no-interaction --prefer-dist --no-dev
+      - name: Composer security audit
+        run: composer audit
+
+  # === SAST — Static Analysis (PHPStan nivel 6) ===
+  phpstan:
+    name: PHPStan (nivel 6)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: shivammathur/setup-php@v2
+        with:
+          php-version: '8.3'
+      - run: composer install --no-interaction --prefer-dist
+      - run: cp .env.example .env && php artisan key:generate
+      - name: PHPStan analysis
+        run: vendor/bin/phpstan analyse --level=6 app/ --memory-limit=512M
+
+  # === Tests de seguridad (PHPUnit) ===
+  security-tests:
+    name: Security Tests
+    runs-on: ubuntu-latest
+    services:
+      mysql:
+        image: mysql:8.0
+        env:
+          MYSQL_ROOT_PASSWORD: root
+          MYSQL_DATABASE: crm_barberia_test
+        ports:
+          - 3306:3306
+        options: >-
+          --health-cmd="mysqladmin ping"
+          --health-interval=10s
+          --health-timeout=5s
+          --health-retries=3
+    steps:
+      - uses: actions/checkout@v4
+      - uses: shivammathur/setup-php@v2
+        with:
+          php-version: '8.3'
+          extensions: pdo_mysql, openssl
+      - run: composer install --no-interaction --prefer-dist
+      - name: Configure test environment
+        run: |
+          cp .env.example .env
+          php artisan key:generate
+          sed -i 's|DB_CONNECTION=.*|DB_CONNECTION=mysql|' .env
+          sed -i 's|DB_HOST=.*|DB_HOST=127.0.0.1|' .env
+          sed -i 's|DB_DATABASE=.*|DB_DATABASE=crm_barberia_test|' .env
+          sed -i 's|DB_USERNAME=.*|DB_USERNAME=root|' .env
+          sed -i 's|DB_PASSWORD=.*|DB_PASSWORD=root|' .env
+      - run: php artisan migrate --force
+      - name: "Tests: SecurePassword, TenantIsolation, AccountLockout"
+        run: vendor/bin/phpunit --filter "SecurePassword|TenantIsolation|AccountLockout" --testdox
+      - name: "Tests: GDPR Anonymization"
+        run: vendor/bin/phpunit --filter "GdprAnonymization" --testdox
+      - name: "Tests: Password History"
+        run: vendor/bin/phpunit --filter "PasswordHistory" --testdox
+      - name: "Tests: SSRF Guard"
+        run: vendor/bin/phpunit --filter "SsrfGuard" --testdox
+      - name: "Tests: User Observer (session invalidation)"
+        run: vendor/bin/phpunit --filter "UserObserver" --testdox
+
+  # === Security Audit Command ===
+  security-audit:
+    name: Security Configuration Audit
+    runs-on: ubuntu-latest
+    needs: security-tests
+    services:
+      mysql:
+        image: mysql:8.0
+        env:
+          MYSQL_ROOT_PASSWORD: root
+          MYSQL_DATABASE: crm_barberia_test
+        ports:
+          - 3306:3306
+        options: >-
+          --health-cmd="mysqladmin ping"
+          --health-interval=10s
+          --health-timeout=5s
+          --health-retries=3
+    steps:
+      - uses: actions/checkout@v4
+      - uses: shivammathur/setup-php@v2
+        with:
+          php-version: '8.3'
+      - run: composer install --no-interaction --prefer-dist
+      - name: Configure environment
+        run: |
+          cp .env.example .env
+          php artisan key:generate
+          sed -i 's|DB_CONNECTION=.*|DB_CONNECTION=mysql|' .env
+          sed -i 's|DB_DATABASE=.*|DB_DATABASE=crm_barberia_test|' .env
+          sed -i 's|DB_USERNAME=.*|DB_USERNAME=root|' .env
+          sed -i 's|DB_PASSWORD=.*|DB_PASSWORD=root|' .env
+          sed -i 's|SESSION_ENCRYPT=.*|SESSION_ENCRYPT=true|' .env
+          sed -i 's|SESSION_HTTP_ONLY=.*|SESSION_HTTP_ONLY=true|' .env
+      - run: php artisan migrate --force
+      - name: Run security audit
+        run: php artisan seguridad:auditar --json | tee audit-result.json
+      - name: Upload audit results
+        uses: actions/upload-artifact@v4
+        with:
+          name: security-audit
+          path: audit-result.json
+
+  # === Security Headers Check ===
+  headers-check:
+    name: Security Headers
+    runs-on: ubuntu-latest
+    needs: security-tests
+    steps:
+      - uses: actions/checkout@v4
+      - uses: shivammathur/setup-php@v2
+        with:
+          php-version: '8.3'
+      - run: composer install --no-interaction --prefer-dist
+      - run: cp .env.example .env && php artisan key:generate
+      - name: Start server
+        run: php artisan serve --host=127.0.0.1 --port=8000 &
+      - name: Wait for server
+        run: sleep 3
+      - name: Check security headers
+        run: |
+          HEADERS=$(curl -s -I http://127.0.0.1:8000)
+          echo "$HEADERS"
+          echo "$HEADERS" | grep -i "X-Content-Type-Options" || (echo "FAIL: Missing X-Content-Type-Options" && exit 1)
+          echo "$HEADERS" | grep -i "X-Frame-Options"        || (echo "FAIL: Missing X-Frame-Options" && exit 1)
+          echo "$HEADERS" | grep -i "Referrer-Policy"        || (echo "FAIL: Missing Referrer-Policy" && exit 1)
+          echo "$HEADERS" | grep -i "Content-Security-Policy"|| (echo "FAIL: Missing CSP" && exit 1)
+          echo "$HEADERS" | grep -i "X-Request-ID"           || (echo "FAIL: Missing X-Request-ID" && exit 1)
+          echo "All security headers present ✓"
+
+  # === SBOM — Software Bill of Materials ===
+  sbom:
+    name: SBOM — Software Bill of Materials
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: shivammathur/setup-php@v2
+        with:
+          php-version: '8.3'
+      - run: composer install --no-interaction --prefer-dist
+      - name: Generate SBOM (composer show)
+        run: composer show --format=json > sbom.json
+      - name: Upload SBOM artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: sbom-${{ github.sha }}
+          path: sbom.json
+          retention-days: 90
+
+  # === DAST — OWASP ZAP Baseline Scan ===
+  dast:
+    name: DAST — OWASP ZAP Baseline
+    runs-on: ubuntu-latest
+    needs: security-tests
+    if: github.ref == 'refs/heads/main' || github.event_name == 'schedule'
+    services:
+      mysql:
+        image: mysql:8.0
+        env:
+          MYSQL_ROOT_PASSWORD: root
+          MYSQL_DATABASE: crm_dast_test
+        ports:
+          - 3306:3306
+        options: >-
+          --health-cmd="mysqladmin ping"
+          --health-interval=10s
+          --health-timeout=5s
+          --health-retries=3
+    steps:
+      - uses: actions/checkout@v4
+      - uses: shivammathur/setup-php@v2
+        with:
+          php-version: '8.3'
+          extensions: pdo_mysql, openssl
+      - run: composer install --no-interaction --prefer-dist
+      - name: Configure environment for DAST
+        run: |
+          cp .env.example .env
+          php artisan key:generate
+          sed -i 's|APP_ENV=.*|APP_ENV=local|' .env
+          sed -i 's|APP_DEBUG=.*|APP_DEBUG=false|' .env
+          sed -i 's|APP_URL=.*|APP_URL=http://127.0.0.1:8000|' .env
+          sed -i 's|DB_CONNECTION=.*|DB_CONNECTION=mysql|' .env
+          sed -i 's|DB_HOST=.*|DB_HOST=127.0.0.1|' .env
+          sed -i 's|DB_DATABASE=.*|DB_DATABASE=crm_dast_test|' .env
+          sed -i 's|DB_USERNAME=.*|DB_USERNAME=root|' .env
+          sed -i 's|DB_PASSWORD=.*|DB_PASSWORD=root|' .env
+      - run: php artisan migrate --force
+      - name: Start Laravel server
+        run: php artisan serve --host=127.0.0.1 --port=8000 &
+      - name: Wait for server to be ready
+        run: |
+          for i in {1..15}; do
+            curl -s http://127.0.0.1:8000/up && break
+            sleep 2
+          done
+      - name: OWASP ZAP Baseline Scan
+        uses: zaproxy/action-baseline@v0.12.0
+        with:
+          target: 'http://127.0.0.1:8000/admin/login'
+          rules_file_name: '.zap/rules.tsv'
+          fail_action: false
+          allow_issue_writing: false
+          cmd_options: '-j'
+      - name: Upload ZAP report
+        uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: zap-report-${{ github.sha }}
+          path: report_json.json
+          retention-days: 30

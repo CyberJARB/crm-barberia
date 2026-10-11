@@ -1,0 +1,16 @@
+# RFC 9116 — Security Disclosure Policy
+# https://securitytxt.org/
+
+Contact: mailto:security@crm-barberia.de
+Preferred-Languages: de, es, en
+Expires: 2027-06-10T00:00:00.000Z
+Policy: https://crm-barberia.de/.well-known/security.txt
+Encryption: https://crm-barberia.de/.well-known/pgp-key.txt
+Acknowledgments: https://crm-barberia.de/seguridad/agradecimientos
+
+# Scope of responsible disclosure:
+# - Authentication and authorization vulnerabilities
+# - Tenant data isolation bypass (IDOR)
+# - SQL injection or XSS
+# - Sensitive data exposure
+# Out of scope: DoS, social engineering, physical attacks

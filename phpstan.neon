@@ -1,0 +1,29 @@
+includes:
+    - vendor/larastan/larastan/extension.neon
+
+parameters:
+    paths:
+        - app/
+
+    level: 6
+
+    ignoreErrors:
+        # Filament dynamic magic methods
+        - '#Call to an undefined method Filament\\#'
+        # Eloquent dynamic properties
+        - '#Access to an undefined property App\\Models\\#'
+        # Sustituto de checkMissingIterableValueType (eliminada en PHPStan 2.x;
+        # la opción desconocida hacía fallar el arranque)
+        -
+            identifier: missingType.iterableValue
+        # Docblocks de genéricos (Builder<TModel>, WithMapping<RowType>...):
+        # exigencia de estilo, no detecta bugs — ruido en proyectos Laravel
+        -
+            identifier: missingType.generics
+        # $this->form es magia de InteractsWithForms (__get) en páginas Filament
+        - '#Access to an undefined property App\\Filament\\Pages\\\w+::\$form#'
+        # Larastan infiere relaciones BelongsTo como no-nulas, pero con
+        # SoftDeletes el padre puede faltar: el operador ?-> es necesario
+        -
+            identifier: nullsafe.neverNull
+
